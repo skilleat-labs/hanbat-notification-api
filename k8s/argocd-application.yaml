@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hanbat-notification-<본인_GitHub_사용자명>
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/<본인_GitHub_사용자명>/hanbat-notification-api
+    targetRevision: main
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hanbat-<본인_GitHub_사용자명>
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
