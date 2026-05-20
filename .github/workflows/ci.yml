@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'Dockerfile'
+  workflow_dispatch:
+
+permissions:
+  id-token: write    # OIDC 토큰 발급 권한
+  contents: write    # 매니페스트 자동 커밋 권한
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "코드 체크아웃"
+        uses: actions/checkout@v4
+
+      - name: "Azure 로그인 (OIDC)"
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: "이미지 태그 설정"
+        id: tag
+        run: |
+          echo "TAG=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: "notification-api 빌드 및 푸시"
+        run: |
+          az acr build \
+            --registry ${{ secrets.ACR_NAME }} \
+            --image notification-api:${{ steps.tag.outputs.TAG }} \
+            --image notification-api:latest \
+            .
+
+      - name: "k8s 매니페스트 이미지 태그 업데이트"
+        run: |
+          sed -i "s|<ACR_NAME>|${{ secrets.ACR_NAME }}|g" k8s/deployment.yaml
+          sed -i "s|notification-api:PLACEHOLDER|notification-api:${{ steps.tag.outputs.TAG }}|g" k8s/deployment.yaml
+
+      - name: "변경된 매니페스트 자동 커밋"
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "ci: update notification-api image tag to ${{ steps.tag.outputs.TAG }} [skip ci]"
+          file_pattern: k8s/deployment.yaml
